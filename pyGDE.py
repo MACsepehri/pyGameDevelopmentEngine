@@ -1,3 +1,14 @@
+"""
+pyGDE (python game development engine)\n
+Created by MACsepehri.\n
+Version 1.0.0\n
+MIT license\n
+More info in github: https://github.com/MACsepehri/pyGameDevelopmentEngine
+"""
+# requierments : pygame
+# use pip install pygame | pip3 install pygame
+# main classes : 'Window' , 'Object' , 'Font' , 'Text'.
+
 # requierments
 import pygame
 import sys
@@ -113,6 +124,8 @@ keyboard = {
     'numenter': pygame.K_KP_ENTER,
     'numequals': pygame.K_KP_EQUALS,
 }
+DEBUG = False
+LOGGER = False
 
 # object class
 class Object:
@@ -129,6 +142,9 @@ class Object:
         self.rect_color = (0, 0, 0)
         self.image = None
         self.rect = None
+        self.circle_radius = 0
+        self.circle_color = (0, 0, 0)
+        self.circle_thickness = 0
 
     def render_image(self, img_path):
         self.img_path = img_path
@@ -155,6 +171,31 @@ class Object:
             self.win_object.win.blit(self.image, (self.x, self.y))
         except pygame.error:
             raise ImageNotFound(f"'{self.img_path}' image path not found.")
+        
+    def draw_circle(self, color, radius, thickness=0):
+        self.obj_type = "circle"
+        self.circle_radius = radius
+        self.circle_thickness = thickness
+        self.circle_color = color
+        
+        self.width = radius * 2
+        self.height = radius * 2
+        
+        if not self.outer and self.win_object:
+            win_rect = self.win_object.win.get_rect()
+            
+            if self.x - radius < 0:
+                self.x = radius
+            elif self.x + radius > win_rect.width:
+                self.x = win_rect.width - radius
+            
+            if self.y - radius < 0:
+                self.y = radius
+            elif self.y + radius > win_rect.height:
+                self.y = win_rect.height - radius
+        
+        pygame.draw.circle(self.win_object.win, self.circle_color, 
+                          (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
 
     def draw_rect(self, width, height, color):
         self.obj_type = "rect"
@@ -196,9 +237,6 @@ class Object:
     def add_move_condition(self, key, direction, speed, callback_action=None):
         self.move_condition.append([key, direction, speed, callback_action])
 
-    def add_keyboard_condition(self): 
-        pass
-
     def callback_keyboard_action(self):
         keys = pygame.key.get_pressed()
         for condition in self.move_condition:
@@ -221,9 +259,9 @@ class Object:
                         condition[3]()
 
         if not self.outer and self.win_object:
+            win_rect = self.win_object.win.get_rect()
+            
             if self.obj_type == "rect":
-                win_rect = self.win_object.win.get_rect()
-                
                 if self.x < 0:
                     self.x = 0
                 elif self.x + self.width > win_rect.width:
@@ -238,8 +276,21 @@ class Object:
                 self.rect.y = self.y
                 pygame.draw.rect(self.win_object.win, self.rect_color, self.rect)
             
+            elif self.obj_type == "circle":
+                if self.x - self.circle_radius < 0:
+                    self.x = self.circle_radius
+                elif self.x + self.circle_radius > win_rect.width:
+                    self.x = win_rect.width - self.circle_radius
+                
+                if self.y - self.circle_radius < 0:
+                    self.y = self.circle_radius
+                elif self.y + self.circle_radius > win_rect.height:
+                    self.y = win_rect.height - self.circle_radius
+                
+                pygame.draw.circle(self.win_object.win, self.circle_color, 
+                                  (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
+            
             elif self.obj_type == "image" and self.image:
-                win_rect = self.win_object.win.get_rect()
                 img_rect = self.image.get_rect()
                 
                 if self.x < 0:
@@ -257,6 +308,9 @@ class Object:
             if self.obj_type == "rect":
                 self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
                 pygame.draw.rect(self.win_object.win, self.rect_color, self.rect)
+            elif self.obj_type == "circle":
+                pygame.draw.circle(self.win_object.win, self.circle_color, 
+                                  (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
             elif self.obj_type == "image" and self.image:
                 self.win_object.win.blit(self.image, (self.x, self.y))
 
@@ -306,10 +360,8 @@ class Button(Object):
     def is_clicked(self):
         if not self.visible:
             return
-        
         mouse_x, mouse_y = pygame.mouse.get_pos()
         mouse_click = pygame.mouse.get_pressed()[0]
-
         if self.rect.collidepoint(mouse_x, mouse_y) and mouse_click:
             if not self.clicked:
                 self.clicked = True
@@ -337,16 +389,23 @@ class Font:
     def font(self): return self.render_font
 
 class Text(Object):
-    def __init__(self, font, text, color, x=0, y=0, win_object=None):
+    def __init__(self, font, text, color, middle=False, x=0, y=0, win_object=None):
         self.x = x
         self.y = y
         self.font = font
         self.text = text
         self.color = color
+        self.middle = middle
         super().__init__(self.x, self.y, win_object)
     
     def draw(self):
         text_object = self.font.font().render(self.text, True, self.color)
+        if self.middle and self.win_object:
+            text_rect = text_object.get_rect()
+            win_rect = self.win_object.win.get_rect()
+            text_rect.center = win_rect.center
+            self.x = text_rect.x
+            self.y = text_rect.y
         self.win_object.win.blit(text_object, (self.x, self.y))
 
 # raise
@@ -413,9 +472,18 @@ class Window:
                 except: raise InvalidCallbackFunction(f"'{callback_func}' function object is invalid.")
         except: raise InvalidKey(f"'{key}' is invalid.")
 
+    def delay(self, seconds): pygame.time.delay(int(seconds * 1000))
+
     def run(self):
+        global DEBUG, LOGGER
+
+        if DEBUG: open("window_object_debuger.log", "x")
         while True:
             for event in pygame.event.get():
+                if DEBUG:
+                    with open("window_object_debuger.log", "a") as file:
+                        file.write(f"Event: {event}\n")
+                if LOGGER: print(f"Event: {event}")
                 if event.type == pygame.QUIT:
                     self.quit_game()
 
