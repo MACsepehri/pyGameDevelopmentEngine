@@ -195,7 +195,7 @@ class Object:
                 self.y = win_rect.height - radius
         
         pygame.draw.circle(self.win_object.win, self.circle_color, 
-                          (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
+                        (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
 
     def draw_rect(self, width, height, color):
         self.obj_type = "rect"
@@ -288,7 +288,7 @@ class Object:
                     self.y = win_rect.height - self.circle_radius
                 
                 pygame.draw.circle(self.win_object.win, self.circle_color, 
-                                  (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
+                                (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
             
             elif self.obj_type == "image" and self.image:
                 img_rect = self.image.get_rect()
@@ -310,7 +310,7 @@ class Object:
                 pygame.draw.rect(self.win_object.win, self.rect_color, self.rect)
             elif self.obj_type == "circle":
                 pygame.draw.circle(self.win_object.win, self.circle_color, 
-                                  (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
+                                (int(self.x), int(self.y)), self.circle_radius, self.circle_thickness)
             elif self.obj_type == "image" and self.image:
                 self.win_object.win.blit(self.image, (self.x, self.y))
 
@@ -420,15 +420,19 @@ class InvalidKey(BaseException): pass
 class InvalidFont(BaseException): pass
 class InvalidFontSize(BaseException): pass
 class FontNotFound(BaseException): pass
+class InvalidFpsType(BaseException): pass
 
 # window object
 class Window:
-    def __init__(self, size=None, title="GDE", fullscreen=False, icon=None):
+    def __init__(self, size=None, title="GDE", fps=60, fullscreen=False, icon=None):
         self.size = size
         self.displayInfo = pygame.display.Info()
         self.title = title
         self.fullscreen = fullscreen
         self.icon = icon
+        self.fps = fps
+        self.clock = pygame.time.Clock()
+        if not isinstance(self.fps, int): raise InvalidFpsType(f"'{type(self.fps)}' is invalid type for fps.")
         if size == None:
             self.size = (self.displayInfo.current_w, self.displayInfo.current_h)
             self.win = pygame.display.set_mode(self.size)
@@ -492,3 +496,4 @@ class Window:
             if self.update_window_func != None: self.update_window_func()
             else: pass
             pygame.display.update()
+            self.clock.tick(self.fps)
