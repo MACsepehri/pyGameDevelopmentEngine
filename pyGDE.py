@@ -477,7 +477,9 @@ class Window:
     def run(self):
         global DEBUG, LOGGER
 
-        if DEBUG: open("window_object_debuger.log", "x")
+        try:
+            if DEBUG: open("window_object_debuger.log", "x")
+        except: pass
         while True:
             for event in pygame.event.get():
                 if DEBUG:
