@@ -13,6 +13,9 @@ More info in github: https://github.com/MACsepehri/pyGameDevelopmentEngine
 import pygame
 import sys
 import os
+import sqlite3
+import mysql.connector
+from mysql.connector import Error
 
 # init of GDE
 pygame.init()
@@ -148,8 +151,7 @@ class Object:
 
     def render_image(self, img_path):
         self.img_path = img_path
-        if self.img_path is None:
-            raise ImageNotFound(f"Image path not provided.")
+        if not isinstance(self.img_path, str): raise ImageNotFound(f"'{self.img_path}' image path not found.")
         try:
             self.image = pygame.image.load(img_path)
             self.obj_type = "image"
@@ -169,8 +171,7 @@ class Object:
                     self.y = win_rect.height - img_rect.height
             
             self.win_object.win.blit(self.image, (self.x, self.y))
-        except pygame.error:
-            raise ImageNotFound(f"'{self.img_path}' image path not found.")
+        except pygame.error: raise ImageNotFound(f"'{self.img_path}' image path not found.")
         
     def draw_circle(self, color, radius, thickness=0):
         self.obj_type = "circle"
@@ -407,6 +408,164 @@ class Text(Object):
             self.x = text_rect.x
             self.y = text_rect.y
         self.win_object.win.blit(text_object, (self.x, self.y))
+
+# database
+class mysql_database:
+    def __init__(self, host, database, user, password, port=3306):
+        self.host = host
+        self.database = database
+        self.user = user
+        self.password = password
+        self.port = port
+        self.connection = None
+        self.cursor = None
+    
+    def connect(self):
+        try:
+            self.connection = mysql.connector.connect(
+                host=self.host,
+                database=self.database,
+                user=self.user,
+                password=self.password,
+                port=self.port
+            )
+            self.cursor = self.connection.cursor(dictionary=True)
+            return True
+        except Error as e:
+            print(f"Connection error: {e}")
+            return False
+    
+    def close(self):
+        if self.cursor:
+            self.cursor.close()
+        if self.connection:
+            self.connection.close()
+    
+    def write(self, table, data):
+        try:
+            if not self.connection or not self.connection.is_connected():
+                if not self.connect():
+                    return False
+            
+            if 'id' in data:
+                set_clause = ', '.join([f"{key} = %s" for key in data.keys() if key != 'id'])
+                values = [data[key] for key in data.keys() if key != 'id']
+                query = f"UPDATE {table} SET {set_clause} WHERE id = %s"
+                values.append(data['id'])
+                self.cursor.execute(query, tuple(values))
+            else:
+                columns = ', '.join(data.keys())
+                placeholders = ', '.join(['%s'] * len(data))
+                query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                self.cursor.execute(query, tuple(data.values()))
+            
+            self.connection.commit()
+            return True
+            
+        except Error as e:
+            print(f"Write error: {e}")
+            if self.connection:
+                self.connection.rollback()
+            return False
+    
+    def read(self, table, conditions=None):
+        try:
+            if not self.connection or not self.connection.is_connected():
+                if not self.connect():
+                    return []
+            
+            query = f"SELECT * FROM {table}"
+            
+            if conditions:
+                where_clause = ' AND '.join([f"{key} = %s" for key in conditions.keys()])
+                query += f" WHERE {where_clause}"
+                self.cursor.execute(query, tuple(conditions.values()))
+            else:
+                self.cursor.execute(query)
+            
+            return self.cursor.fetchall()
+            
+        except Error as e:
+            print(f"Read error: {e}")
+            return []
+
+class sqlite_database:
+    def __init__(self, db_file):
+        self.db_file = db_file
+        self.connection = None
+        self.cursor = None
+    
+    def connect(self):
+        try:
+            self.connection = sqlite3.connect(self.db_file)
+            self.connection.row_factory = sqlite3.Row
+            self.cursor = self.connection.cursor()
+            return True
+        except sqlite3.Error as e:
+            print(f"Connection error: {e}")
+            return False
+    
+    def close(self):
+        if self.cursor:
+            self.cursor.close()
+        if self.connection:
+            self.connection.close()
+    
+    def write(self, table, data):
+        try:
+            if not self.connection:
+                if not self.connect():
+                    return False
+            
+            if 'id' in data and self._record_exists(table, data['id']):
+                set_clause = ', '.join([f"{key} = ?" for key in data.keys() if key != 'id'])
+                values = [data[key] for key in data.keys() if key != 'id']
+                query = f"UPDATE {table} SET {set_clause} WHERE id = ?"
+                values.append(data['id'])
+                self.cursor.execute(query, tuple(values))
+            else:
+                columns = ', '.join(data.keys())
+                placeholders = ', '.join(['?'] * len(data))
+                query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                self.cursor.execute(query, tuple(data.values()))
+            
+            self.connection.commit()
+            return True
+            
+        except sqlite3.Error as e:
+            print(f"Write error: {e}")
+            if self.connection:
+                self.connection.rollback()
+            return False
+    
+    def _record_exists(self, table, id_value):
+        try:
+            self.cursor.execute(f"SELECT id FROM {table} WHERE id = ?", (id_value,))
+            return self.cursor.fetchone() is not None
+        except:
+            return False
+    
+    def read(self, table, conditions=None):
+        try:
+            if not self.connection:
+                if not self.connect():
+                    return []
+            
+            query = f"SELECT * FROM {table}"
+            
+            if conditions:
+                where_clause = ' AND '.join([f"{key} = ?" for key in conditions.keys()])
+                query += f" WHERE {where_clause}"
+                self.cursor.execute(query, tuple(conditions.values()))
+            else:
+                self.cursor.execute(query)
+            
+            rows = self.cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except sqlite3.Error as e:
+            print(f"Read error: {e}")
+            return []
 
 # raise
 class IconNotFoundError(BaseException): pass
